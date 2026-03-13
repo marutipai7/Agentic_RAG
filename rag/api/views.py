@@ -4,19 +4,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
-
-from rag.services.ingestion_services import IngestionService
-from rag.ingestion.embedding_service import EmbeddingService
-from rag.vectorstore.chroma_store import ChromaStore
-from rag.services.retrival_services import RetrievalService
-
 from rag.core.dependencies import ingestion_service, retrieval_service, vector_store
-# Create your views here.
-
+from rag.services.agentic_service import AgenticService
 
 class UploadDocumentView(APIView):
 
-    parser_class  = [MultiPartParser, FormParser]
+    parser_classes  = [MultiPartParser, FormParser]
 
     def post(self, request):
         file = request.FILES.get('file')
@@ -53,5 +46,21 @@ class SimilaritySearchView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         result = retrieval_service.search(query, k=k)
+
+        return Response(result)
+    
+class QueryAPIView(APIView):
+
+    def post(self, request):
+        question = request.data.get("question", "")
+
+        if not question:
+            return Response({
+                "status": "error",
+                "message": "Question parameter is required."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = AgenticService()
+        result = agent.ask(question)
 
         return Response(result)

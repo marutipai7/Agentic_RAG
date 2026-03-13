@@ -13,3 +13,4 @@ uploads/
 .idea/
 .vscode/
 chroma_db/
+bm25_index/

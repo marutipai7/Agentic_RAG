@@ -2,6 +2,8 @@ from rag.ingestion.document_loader import DocumentLoader
 from rag.ingestion.text_splitter import TextSplitter
 from rag.ingestion.embedding_service import EmbeddingService
 from rag.vectorstore.chroma_store import ChromaStore
+from rag.retrieval.bm25_index import BM25Index
+from langchain_community.vectorstores.utils import filter_complex_metadata
 
 class IngestionService:
 
@@ -14,7 +16,9 @@ class IngestionService:
 
         # chunk documents
         chunks = TextSplitter.split_documents(documents)
-
+        chunks = filter_complex_metadata(chunks)
+        bm25 = BM25Index()
+        bm25.add_documents(chunks)
         # add chunks to vector store
         self.vector_store.add_documents(chunks)
 
