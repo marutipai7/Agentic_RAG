@@ -9,7 +9,28 @@ from rag.services.agentic_service import AgenticService
 
 
 def login_view(request):
-    return render(request, "rag/templates/login.html")
+    return render(request, "login.html")
+
+def register_view(request):
+    return render(request, "register.html")
+
+def dashboard_view(request):
+    return render(request, "dashboard.html")
+
+def ragchat_view(request):
+    return render(request, "ragchat.html")
+
+def profile_view(request):
+    return render(request, "profile.html")
+
+def upload_view(request):
+    return render(request, "upload_document.html")
+
+def vector_store_view(request):
+    return render(request, "vector_store.html")
+
+def llm_stats_view(request):
+    return render(request, "llm_stats.html")
 
 class UploadDocumentView(APIView):
 

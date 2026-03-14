@@ -1,0 +1,1033 @@
+{% extends "layout.html" %}
+{% block title %}LLM Stats — AgenticRAG{% endblock %}
+{% block nav_llmstat %}active{% endblock %}
+{% block breadcrumb %}/ <span>LLM Stats</span>{% endblock %}
+{% block username %}{{ user.username }}{% endblock %}
+{% block avatar_initial %}{{ user.username|first|upper }}{% endblock %}
+
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* ── Page layout ── */
+  .stats-page { max-width: 1200px; }
+
+  .page-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 32px;
+  }
+  .page-top-left .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 8px;
+  }
+  .page-top-left h2 { font-family: var(--font-head); font-size: 26px; font-weight: 800; }
+  .page-top-left p  { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+  .top-controls { display: flex; gap: 10px; align-items: center; }
+  .time-select {
+    padding: 9px 14px; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 9px; color: var(--text); font-family: var(--font-mono);
+    font-size: 12px; outline: none; cursor: pointer; transition: border-color 0.2s;
+  }
+  .time-select:focus { border-color: var(--amber); }
+  .time-select option { background: var(--bg2); }
+  .refresh-btn {
+    padding: 9px 16px; background: var(--glass); border: 1px solid var(--border);
+    border-radius: 9px; color: var(--muted); font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; font-family: var(--font-body);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .refresh-btn:hover { color: var(--amber); border-color: var(--amber); }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--success);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+  }
+
+  /* ── KPI cards ── */
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 14px; margin-bottom: 28px;
+  }
+  .kpi-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 13px; padding: 18px 20px;
+    position: relative; overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+    animation: cardIn 0.4s ease both;
+  }
+  .kpi-card:hover { transform: translateY(-2px); border-color: rgba(245,158,11,0.3); }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--amber), transparent); opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .kpi-card:hover::before { opacity: 1; }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .kpi-card:nth-child(1) { animation-delay: 0.05s; }
+  .kpi-card:nth-child(2) { animation-delay: 0.1s; }
+  .kpi-card:nth-child(3) { animation-delay: 0.15s; }
+  .kpi-card:nth-child(4) { animation-delay: 0.2s; }
+  .kpi-card:nth-child(5) { animation-delay: 0.25s; }
+
+  .kpi-label {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-family: var(--font-head); font-size: 30px; font-weight: 800; line-height: 1;
+    color: var(--text);
+  }
+  .kpi-value .unit { font-size: 14px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+  .kpi-delta {
+    font-size: 12px; margin-top: 8px; display: flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono);
+  }
+  .kpi-delta.up   { color: #34d399; }
+  .kpi-delta.down { color: #fca5a5; }
+  .kpi-delta.neutral { color: var(--muted); }
+  .kpi-sparkline {
+    margin-top: 10px;
+    height: 32px !important;
+    max-height: 32px !important;
+    width: 100% !important;
+  }
+
+  /* ── Charts row ── */
+  .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .chart-panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px;
+  }
+  .chart-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+  }
+  .chart-title { font-family: var(--font-head); font-size: 15px; font-weight: 700; }
+  .chart-sub   { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
+  .legend { display: flex; gap: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex; gap: 4px; background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 5px; width: fit-content; margin-bottom: 20px;
+  }
+  .tab-btn {
+    padding: 8px 20px; border-radius: 7px; font-size: 13px; font-weight: 600;
+    cursor: pointer; color: var(--muted); transition: all 0.2s;
+    border: none; background: none; font-family: var(--font-body);
+  }
+  .tab-btn.active { background: var(--amber); color: var(--bg); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Calls table ── */
+  .table-wrap {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; overflow: hidden; margin-bottom: 20px;
+  }
+  .table-toolbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+  }
+  .tbl-search {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; max-width: 300px;
+    transition: border-color 0.2s;
+  }
+  .tbl-search:focus-within { border-color: var(--amber); }
+  .tbl-search input { background: none; border: none; outline: none; color: var(--text); font-size: 13px; font-family: var(--font-body); width: 100%; }
+  .tbl-search input::placeholder { color: var(--muted); }
+  .tbl-filter {
+    padding: 8px 12px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 12px; outline: none;
+    font-family: var(--font-mono); cursor: pointer;
+  }
+  .tbl-filter option { background: var(--bg2); }
+  .export-btn {
+    margin-left: auto; padding: 8px 14px;
+    background: var(--glass); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--muted); font-size: 12px; cursor: pointer; transition: all 0.2s;
+    font-family: var(--font-body); font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .export-btn:hover { color: var(--amber); border-color: var(--amber); }
+
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--muted);
+    padding: 10px 16px; text-align: left; font-weight: 400;
+    background: rgba(255,255,255,0.02);
+  }
+  .data-table td { padding: 11px 16px; border-top: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+  .data-table tr:hover td { background: var(--glass); cursor: pointer; }
+
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.ok  { background: #34d399; }
+  .status-dot.err { background: #fca5a5; }
+  .status-dot.slow{ background: var(--amber); }
+
+  .model-tag {
+    padding: 2px 8px; border-radius: 4px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.5px;
+    background: var(--amber-glow); border: 1px solid rgba(245,158,11,0.2); color: var(--amber);
+  }
+  .mono-sm { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+  .latency-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .latency-bar {
+    height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--amber), #fbbf24);
+    min-width: 4px;
+  }
+
+  /* ── JSON/TSON comparison panel ── */
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .compare-panel {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;
+  }
+  .compare-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .compare-format {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+    font-weight: 700;
+  }
+  .compare-format.json { color: #93c5fd; }
+  .compare-format.tson { color: #a5b4fc; }
+  .compare-meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .code-block {
+    padding: 20px; font-family: var(--font-mono); font-size: 12px; line-height: 1.8;
+    overflow-x: auto; max-height: 340px; overflow-y: auto;
+    background: var(--bg);
+  }
+  .code-block .key   { color: #93c5fd; }
+  .code-block .str   { color: #86efac; }
+  .code-block .num   { color: #fbbf24; }
+  .code-block .bool  { color: #f9a8d4; }
+  .code-block .null  { color: var(--muted); }
+  .code-block .comment { color: #4b5563; font-style: italic; }
+  .code-block .type-ann { color: #c4b5fd; }
+
+  .compare-stats-row {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--border);
+  }
+  .cmp-stat {
+    padding: 12px 16px; border-right: 1px solid var(--border); text-align: center;
+  }
+  .cmp-stat:last-child { border-right: none; }
+  .cmp-stat-val { font-family: var(--font-head); font-size: 16px; font-weight: 800; color: var(--amber); }
+  .cmp-stat-lbl { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
+
+  .diff-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 5px; font-family: var(--font-mono); font-size: 11px;
+  }
+  .diff-badge.better { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.2); }
+  .diff-badge.worse  { background: rgba(239,68,68,0.12);  color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+  .diff-badge.same   { background: var(--glass); color: var(--muted); border: 1px solid var(--border); }
+
+  /* ── Call detail drawer ── */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px);
+    z-index: 900; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  .drawer-overlay.open { opacity: 1; pointer-events: all; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 520px;
+    background: var(--bg2); border-left: 1px solid var(--border);
+    z-index: 901; transform: translateX(100%); transition: transform 0.3s ease;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .drawer-overlay.open .drawer { transform: translateX(0); }
+  .drawer-head {
+    padding: 24px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .drawer-title { font-family: var(--font-head); font-size: 17px; font-weight: 800; }
+  .close-btn {
+    width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--glass); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--muted); transition: all 0.2s;
+  }
+  .close-btn:hover { color: var(--danger); border-color: rgba(239,68,68,0.4); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 24px; }
+
+  .detail-section { margin-bottom: 24px; }
+  .detail-section-title {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .detail-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .detail-item-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-bottom: 4px; }
+  .detail-item-val   { font-family: var(--font-head); font-size: 16px; font-weight: 700; }
+  .detail-prompt, .detail-response {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 9px;
+    padding: 14px; font-size: 13px; line-height: 1.7; color: var(--text);
+    max-height: 160px; overflow-y: auto;
+  }
+  .token-breakdown { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+  .tok-seg {
+    flex: 1; padding: 10px; text-align: center; border-right: 1px solid var(--border);
+  }
+  .tok-seg:last-child { border-right: none; }
+  .tok-seg-val { font-family: var(--font-head); font-size: 18px; font-weight: 800; }
+  .tok-seg-lbl { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
+  .tok-seg.prompt-tok .tok-seg-val { color: #93c5fd; }
+  .tok-seg.completion-tok .tok-seg-val { color: #86efac; }
+  .tok-seg.total-tok .tok-seg-val { color: var(--amber); }
+
+  @media (max-width: 1100px) {
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .charts-row { grid-template-columns: 1fr; }
+    .compare-grid { grid-template-columns: 1fr; }
+    .drawer { width: 100%; }
+  }
+  @media (max-width: 700px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+  <div style="display:flex;align-items:center;gap:8px;">
+    <div class="live-dot"></div>
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:1px;">LIVE</span>
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="stats-page">
+
+  <div class="page-top">
+    <div class="page-top-left">
+      <div class="eyebrow">Observability</div>
+      <h2>LLM Stats &amp; Analysis</h2>
+      <p>Token throughput, latency, cost estimates, and format comparison across all LLM calls.</p>
+    </div>
+    <div class="top-controls">
+      <select class="time-select" onchange="updateTimeRange(this.value)">
+        <option value="1h">Last 1 hour</option>
+        <option value="24h" selected>Last 24 hours</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+      </select>
+      <button class="refresh-btn" onclick="refreshStats()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- ── KPI Cards ── -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Calls</div>
+      <div class="kpi-value" id="kpiCalls">{{ total_calls|default:"247" }}</div>
+      <div class="kpi-delta up" id="kpiCallsDelta">↑ 18 vs yesterday</div>
+      <canvas class="kpi-sparkline" id="sparkCalls"></canvas>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Avg Latency</div>
+      <div class="kpi-value" id="kpiLatency">{{ avg_latency|default:"1.4" }}<span class="unit">s</span></div>
+      <div class="kpi-delta down" id="kpiLatencyDelta">↓ 0.2s slower</div>
+      <canvas class="kpi-sparkline" id="sparkLatency"></canvas>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Tokens / sec</div>
+      <div class="kpi-value" id="kpiTps">{{ avg_tps|default:"38.4" }}</div>
+      <div class="kpi-delta up">↑ 4.2 faster</div>
+      <canvas class="kpi-sparkline" id="sparkTps"></canvas>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Tokens</div>
+      <div class="kpi-value" id="kpiTokens">{{ total_tokens|default:"182" }}<span class="unit">k</span></div>
+      <div class="kpi-delta neutral">≈ similar to yesterday</div>
+      <canvas class="kpi-sparkline" id="sparkTokens"></canvas>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Est. Cost</div>
+      <div class="kpi-value" id="kpiCost">${{ est_cost|default:"0.82" }}</div>
+      <div class="kpi-delta up">↑ $0.14 more</div>
+      <canvas class="kpi-sparkline" id="sparkCost"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Charts ── -->
+  <div class="charts-row">
+    <div class="chart-panel">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Token Throughput Over Time</div>
+          <div class="chart-sub">Prompt tokens · Completion tokens · Tokens/sec</div>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#93c5fd"></div>Prompt</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#86efac"></div>Completion</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>TPS</div>
+        </div>
+      </div>
+      <canvas id="throughputChart" height="90"></canvas>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Latency Distribution</div>
+          <div class="chart-sub">Response time buckets</div>
+        </div>
+      </div>
+      <canvas id="latencyChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- Second charts row -->
+  <div class="charts-row" style="margin-bottom:28px;">
+    <div class="chart-panel">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Calls Timeline</div>
+          <div class="chart-sub">Success vs error rate per hour</div>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div>Success</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#fca5a5"></div>Error</div>
+        </div>
+      </div>
+      <canvas id="callsChart" height="90"></canvas>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title">Model Usage Split</div>
+          <div class="chart-sub">Calls by model</div>
+        </div>
+      </div>
+      <canvas id="modelChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Tabs ── -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('calls', this)">Call Log</button>
+    <button class="tab-btn" onclick="switchTab('compare', this)">JSON vs TSON</button>
+    <button class="tab-btn" onclick="switchTab('tokens', this)">Token Analysis</button>
+  </div>
+
+  <!-- ── Call Log Tab ── -->
+  <div class="tab-content active" id="tab-calls">
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <div class="tbl-search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input type="text" placeholder="Search prompts…" oninput="filterCalls(this.value)" />
+        </div>
+        <select class="tbl-filter" onchange="filterCallsByStatus(this.value)">
+          <option value="">All Status</option>
+          <option value="ok">Success</option>
+          <option value="err">Error</option>
+          <option value="slow">Slow (&gt;3s)</option>
+        </select>
+        <select class="tbl-filter" onchange="filterCallsByModel(this.value)">
+          <option value="">All Models</option>
+          <option value="llama-3.3-70b-versatile">llama-3.3-70b</option>
+          <option value="llama-3.1-8b-instant">llama-3.1-8b</option>
+        </select>
+        <button class="export-btn" onclick="exportJSON()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Export JSON
+        </button>
+      </div>
+
+      <table class="data-table" id="callsTable">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Timestamp</th>
+            <th>Model</th>
+            <th>Prompt (preview)</th>
+            <th>Prompt Tok</th>
+            <th>Compl Tok</th>
+            <th>TPS</th>
+            <th>Latency</th>
+          </tr>
+        </thead>
+        <tbody id="callsBody">
+          <!-- Populated by JS from Django context or demo data -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── JSON vs TSON Tab ── -->
+  <div class="tab-content" id="tab-compare">
+    <p style="font-size:14px;color:var(--muted);margin-bottom:20px;max-width:680px;">
+      Compare how LLM call payloads look in standard <strong style="color:var(--text)">JSON</strong>
+      vs <strong style="color:#c4b5fd">TSON</strong> (Typed-SON — a schema-typed superset).
+      TSON adds type annotations, optional fields, and comments, making API payloads self-documenting.
+    </p>
+
+    <div class="compare-grid">
+      <!-- JSON panel -->
+      <div class="compare-panel">
+        <div class="compare-header">
+          <div>
+            <div class="compare-format json">JSON</div>
+            <div class="compare-meta">Standard API payload · No type info</div>
+          </div>
+          <button class="export-btn" onclick="copyCode('jsonCode')">Copy</button>
+        </div>
+        <div class="code-block" id="jsonCode"><pre><span class="key">{</span>
+  <span class="key">"model"</span>: <span class="str">"llama-3.3-70b-versatile"</span>,
+  <span class="key">"messages"</span>: [
+    <span class="key">{</span>
+      <span class="key">"role"</span>: <span class="str">"system"</span>,
+      <span class="key">"content"</span>: <span class="str">"You are an AI assistant…"</span>
+    <span class="key">}</span>,
+    <span class="key">{</span>
+      <span class="key">"role"</span>: <span class="str">"user"</span>,
+      <span class="key">"content"</span>: <span class="str">"What is RAG?"</span>
+    <span class="key">}</span>
+  ],
+  <span class="key">"temperature"</span>: <span class="num">0.2</span>,
+  <span class="key">"max_tokens"</span>: <span class="num">1024</span>,
+  <span class="key">"stream"</span>: <span class="bool">false</span>,
+  <span class="key">"usage"</span>: <span class="null">null</span>
+<span class="key">}</span></pre></div>
+        <div class="compare-stats-row">
+          <div class="cmp-stat">
+            <div class="cmp-stat-val">312</div>
+            <div class="cmp-stat-lbl">Bytes</div>
+          </div>
+          <div class="cmp-stat">
+            <div class="cmp-stat-val">0</div>
+            <div class="cmp-stat-lbl">Type Hints</div>
+          </div>
+          <div class="cmp-stat">
+            <div class="cmp-stat-val">—</div>
+            <div class="cmp-stat-lbl">Validation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TSON panel -->
+      <div class="compare-panel">
+        <div class="compare-header">
+          <div>
+            <div class="compare-format tson">TSON</div>
+            <div class="compare-meta">Typed superset · Self-documenting</div>
+          </div>
+          <button class="export-btn" onclick="copyCode('tsonCode')">Copy</button>
+        </div>
+        <div class="code-block" id="tsonCode"><pre><span class="comment">// LLM Request — AgenticRAG v1</span>
+<span class="key">{</span>
+  <span class="key">"model"</span><span class="type-ann">&lt;string&gt;</span>: <span class="str">"llama-3.3-70b-versatile"</span>,
+  <span class="key">"messages"</span><span class="type-ann">&lt;Message[]&gt;</span>: [
+    <span class="key">{</span>
+      <span class="key">"role"</span><span class="type-ann">&lt;"system"|"user"|"assistant"&gt;</span>: <span class="str">"system"</span>,
+      <span class="key">"content"</span><span class="type-ann">&lt;string&gt;</span>: <span class="str">"You are an AI assistant…"</span>
+    <span class="key">}</span>,
+    <span class="key">{</span>
+      <span class="key">"role"</span><span class="type-ann">&lt;"system"|"user"|"assistant"&gt;</span>: <span class="str">"user"</span>,
+      <span class="key">"content"</span><span class="type-ann">&lt;string&gt;</span>: <span class="str">"What is RAG?"</span>
+    <span class="key">}</span>
+  ],
+  <span class="key">"temperature"</span><span class="type-ann">&lt;float 0..2&gt;</span>: <span class="num">0.2</span>,
+  <span class="key">"max_tokens"</span><span class="type-ann">&lt;int?&gt;</span>: <span class="num">1024</span>,
+  <span class="key">"stream"</span><span class="type-ann">&lt;bool&gt;</span>: <span class="bool">false</span>,
+  <span class="comment">// usage populated after response</span>
+  <span class="key">"usage"</span><span class="type-ann">&lt;Usage?&gt;</span>: <span class="null">null</span>
+<span class="key">}</span></pre></div>
+        <div class="compare-stats-row">
+          <div class="cmp-stat">
+            <div class="cmp-stat-val">498</div>
+            <div class="cmp-stat-lbl">Bytes</div>
+          </div>
+          <div class="cmp-stat">
+            <div class="cmp-stat-val">7</div>
+            <div class="cmp-stat-lbl">Type Hints</div>
+          </div>
+          <div class="cmp-stat">
+            <div class="cmp-stat-val">✓</div>
+            <div class="cmp-stat-lbl">Validation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison summary table -->
+    <div class="table-wrap">
+      <div class="table-toolbar" style="padding:14px 20px;">
+        <span style="font-family:var(--font-head);font-size:14px;font-weight:700;">Format Comparison</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Attribute</th>
+            <th>JSON</th>
+            <th>TSON</th>
+            <th>Winner</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:600;">Payload size</td>
+            <td class="mono-sm">312 bytes</td>
+            <td class="mono-sm">498 bytes (+60%)</td>
+            <td><span class="diff-badge better">JSON ✓</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;">Type safety</td>
+            <td class="mono-sm">None</td>
+            <td class="mono-sm">Full inline types</td>
+            <td><span class="diff-badge better">TSON ✓</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;">Human readability</td>
+            <td class="mono-sm">Good</td>
+            <td class="mono-sm">Excellent + comments</td>
+            <td><span class="diff-badge better">TSON ✓</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;">Parser support</td>
+            <td class="mono-sm">Universal</td>
+            <td class="mono-sm">Requires TSON parser</td>
+            <td><span class="diff-badge better">JSON ✓</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;">Runtime validation</td>
+            <td class="mono-sm">External only</td>
+            <td class="mono-sm">Built-in schema</td>
+            <td><span class="diff-badge better">TSON ✓</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;">Optional fields</td>
+            <td class="mono-sm">Convention only</td>
+            <td class="mono-sm"><span class="mono-sm">&lt;T?&gt; annotation</span></td>
+            <td><span class="diff-badge better">TSON ✓</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;">API parse speed</td>
+            <td class="mono-sm">~0.3ms</td>
+            <td class="mono-sm">~0.9ms</td>
+            <td><span class="diff-badge better">JSON ✓</span></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600;">Groq API compat.</td>
+            <td class="mono-sm">Native</td>
+            <td class="mono-sm">Convert before send</td>
+            <td><span class="diff-badge better">JSON ✓</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="background:var(--amber-glow);border:1px solid rgba(245,158,11,0.2);border-radius:12px;padding:16px 20px;margin-top:4px;">
+      <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);margin-bottom:8px;">Recommendation</div>
+      <p style="font-size:13px;color:var(--text);line-height:1.7;">
+        Use <strong>JSON</strong> for all live API calls to Groq (smaller payload, faster parse, native compatibility).
+        Use <strong>TSON</strong> for internal logging, debugging, and developer documentation — the type annotations
+        make stored call logs self-describing and easier to validate later.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Token Analysis Tab ── -->
+  <div class="tab-content" id="tab-tokens">
+    <div class="charts-row" style="margin-bottom:20px;">
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Token Usage Breakdown</div>
+            <div class="chart-sub">Prompt vs completion by query</div>
+          </div>
+        </div>
+        <canvas id="tokenBreakdownChart" height="100"></canvas>
+      </div>
+      <div class="chart-panel">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">TPS Histogram</div>
+            <div class="chart-sub">Tokens per second distribution</div>
+          </div>
+        </div>
+        <canvas id="tpsHistChart" height="120"></canvas>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-toolbar" style="padding:14px 20px;">
+        <span style="font-family:var(--font-head);font-size:14px;font-weight:700;">Token Summary by Model</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Calls</th>
+            <th>Avg Prompt Tok</th>
+            <th>Avg Completion Tok</th>
+            <th>Avg TPS</th>
+            <th>Avg Latency</th>
+            <th>Est Cost / 1k calls</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="model-tag">llama-3.3-70b-versatile</span></td>
+            <td class="mono-sm">198</td>
+            <td class="mono-sm">312</td>
+            <td class="mono-sm">489</td>
+            <td class="mono-sm">38.4</td>
+            <td class="mono-sm">1.4s</td>
+            <td style="font-family:var(--font-mono);font-size:12px;color:var(--amber);">$0.63</td>
+          </tr>
+          <tr>
+            <td><span class="model-tag" style="background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.2);color:#a5b4fc;">llama-3.1-8b-instant</span></td>
+            <td class="mono-sm">49</td>
+            <td class="mono-sm">294</td>
+            <td class="mono-sm">371</td>
+            <td class="mono-sm">62.1</td>
+            <td class="mono-sm">0.7s</td>
+            <td style="font-family:var(--font-mono);font-size:12px;color:#a5b4fc;">$0.08</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Call Detail Drawer ── -->
+<div class="drawer-overlay" id="drawerOverlay">
+  <div class="drawer" id="detailDrawer">
+    <div class="drawer-head">
+      <div class="drawer-title">Call Detail</div>
+      <div class="close-btn" onclick="closeDrawer()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </div>
+    </div>
+    <div class="drawer-body">
+      <div class="detail-section">
+        <div class="detail-section-title">Overview</div>
+        <div class="detail-grid">
+          <div class="detail-item"><div class="detail-item-label">Model</div><div class="detail-item-val" id="dModel" style="font-size:12px;font-family:var(--font-mono);"></div></div>
+          <div class="detail-item"><div class="detail-item-label">Latency</div><div class="detail-item-val" id="dLatency"></div></div>
+          <div class="detail-item"><div class="detail-item-label">TPS</div><div class="detail-item-val" id="dTps"></div></div>
+          <div class="detail-item"><div class="detail-item-label">Timestamp</div><div class="detail-item-val" id="dTime" style="font-size:11px;font-family:var(--font-mono);"></div></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Token Breakdown</div>
+        <div class="token-breakdown">
+          <div class="tok-seg prompt-tok"><div class="tok-seg-val" id="dPromptTok">—</div><div class="tok-seg-lbl">Prompt</div></div>
+          <div class="tok-seg completion-tok"><div class="tok-seg-val" id="dComplTok">—</div><div class="tok-seg-lbl">Completion</div></div>
+          <div class="tok-seg total-tok"><div class="tok-seg-val" id="dTotalTok">—</div><div class="tok-seg-lbl">Total</div></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Prompt</div>
+        <div class="detail-prompt" id="dPrompt">—</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Response</div>
+        <div class="detail-response" id="dResponse">—</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Raw JSON Payload</div>
+        <div class="code-block" id="dRaw" style="border-radius:9px;font-size:11px;max-height:200px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" style="position:fixed;bottom:24px;right:24px;z-index:9999;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;display:none;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#34d399;"></div>
+
+<script>
+// ── Demo data (replace with Django context) ──
+const CALLS = {{ llm_calls_json|default:"null" }} || [
+  { id:'c001', ts:'16:42:11', model:'llama-3.3-70b-versatile', status:'ok',   promptTok:312, complTok:489, tps:38.4, latency:1.4, prompt:'What is RAG?',                        response:'RAG stands for Retrieval-Augmented Generation...' },
+  { id:'c002', ts:'16:39:05', model:'llama-3.3-70b-versatile', status:'ok',   promptTok:428, complTok:612, tps:41.2, latency:1.3, prompt:'Summarize the main findings.',         response:'The main findings from the document include...' },
+  { id:'c003', ts:'16:35:22', model:'llama-3.1-8b-instant',    status:'ok',   promptTok:290, complTok:341, tps:62.1, latency:0.7, prompt:'List key concepts from chapter 2.',    response:'Key concepts: 1. Vector embeddings...' },
+  { id:'c004', ts:'16:30:18', model:'llama-3.3-70b-versatile', status:'slow', promptTok:680, complTok:892, tps:29.1, latency:4.1, prompt:'Compare the two approaches in detail.',response:'Approach A focuses on retrieval quality while...' },
+  { id:'c005', ts:'16:24:44', model:'llama-3.3-70b-versatile', status:'err',  promptTok:112, complTok:0,   tps:0,    latency:0.2, prompt:'[context too long — truncated]',        response:'Error: context_length_exceeded' },
+  { id:'c006', ts:'16:18:30', model:'llama-3.1-8b-instant',    status:'ok',   promptTok:255, complTok:290, tps:58.4, latency:0.8, prompt:'What does the FAQ say about pricing?',  response:'According to the FAQ, pricing is...' },
+  { id:'c007', ts:'16:10:02', model:'llama-3.3-70b-versatile', status:'ok',   promptTok:340, complTok:510, tps:39.8, latency:1.5, prompt:'Explain vector databases.',             response:'Vector databases store high-dimensional...' },
+  { id:'c008', ts:'16:05:55', model:'llama-3.3-70b-versatile', status:'ok',   promptTok:390, complTok:640, tps:37.6, latency:1.6, prompt:'How does chunking affect retrieval?',    response:'Chunking strategy directly impacts...' },
+];
+
+// ── Chart defaults ──
+const chartDefaults = {
+  color: '#e2e8f0',
+  borderColor: 'rgba(255,255,255,0.08)',
+  plugins: { legend: { display: false }, tooltip: {
+    backgroundColor: '#0d1220', borderColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, titleColor: '#e2e8f0', bodyColor: '#94a3b8',
+    padding: 10, cornerRadius: 8,
+  }},
+  scales: {
+    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { family: 'Syne Mono', size: 10 } } },
+    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { family: 'Syne Mono', size: 10 } } },
+  }
+};
+
+// ── Throughput chart ──
+new Chart(document.getElementById('throughputChart'), {
+  type: 'line',
+  data: {
+    labels: ['12:00','13:00','14:00','15:00','16:00','16:30','Now'],
+    datasets: [
+      { label:'Prompt', data:[280,310,295,340,312,390,360],
+        borderColor:'#93c5fd', backgroundColor:'rgba(147,197,253,0.08)', tension:0.4, fill:true, pointRadius:3 },
+      { label:'Completion', data:[420,480,390,510,489,640,520],
+        borderColor:'#86efac', backgroundColor:'rgba(134,239,172,0.06)', tension:0.4, fill:true, pointRadius:3 },
+      { label:'TPS', data:[36,41,38,43,38,37,39], yAxisID:'y1',
+        borderColor:'#f59e0b', tension:0.4, pointRadius:3, borderDash:[4,4] },
+    ]
+  },
+  options: { ...chartDefaults, scales: {
+    ...chartDefaults.scales,
+    y1: { position:'right', grid:{display:false}, ticks:{color:'#64748b',font:{family:'Syne Mono',size:10}}, title:{display:true,text:'TPS',color:'#f59e0b'} }
+  }}
+});
+
+// ── Latency distribution ──
+new Chart(document.getElementById('latencyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['<0.5s','0.5-1s','1-2s','2-3s','3-4s','>4s'],
+    datasets: [{ data:[8,41,112,52,24,10],
+      backgroundColor:['#34d399','#34d399','#f59e0b','#f59e0b','#fca5a5','#fca5a5'],
+      borderRadius:5, borderSkipped:false }]
+  },
+  options: { ...chartDefaults }
+});
+
+// ── Calls timeline ──
+new Chart(document.getElementById('callsChart'), {
+  type: 'bar',
+  data: {
+    labels: ['10:00','11:00','12:00','13:00','14:00','15:00','16:00'],
+    datasets: [
+      { label:'Success', data:[18,24,31,28,34,22,38],
+        backgroundColor:'rgba(52,211,153,0.7)', borderRadius:3, borderSkipped:false },
+      { label:'Error',   data:[1,0,2,1,0,3,1],
+        backgroundColor:'rgba(252,165,165,0.7)', borderRadius:3, borderSkipped:false },
+    ]
+  },
+  options: { ...chartDefaults, scales: { ...chartDefaults.scales, x:{...chartDefaults.scales.x,stacked:true}, y:{...chartDefaults.scales.y,stacked:true} } }
+});
+
+// ── Model usage donut ──
+new Chart(document.getElementById('modelChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['llama-3.3-70b','llama-3.1-8b'],
+    datasets: [{ data:[198,49],
+      backgroundColor:['#f59e0b','#6366f1'],
+      borderColor:'#0d1220', borderWidth:3, hoverOffset:6 }]
+  },
+  options: { plugins: { legend: { display:true, position:'bottom',
+    labels: { color:'#64748b', font:{family:'Syne Mono',size:11}, padding:16, boxWidth:10, boxHeight:10 }
+  }, tooltip: chartDefaults.plugins.tooltip } }
+});
+
+// ── Token breakdown chart ──
+new Chart(document.getElementById('tokenBreakdownChart'), {
+  type: 'bar',
+  data: {
+    labels: CALLS.slice(0,6).map(c => c.prompt.slice(0,18)+'…'),
+    datasets: [
+      { label:'Prompt',     data: CALLS.slice(0,6).map(c=>c.promptTok),
+        backgroundColor:'rgba(147,197,253,0.7)', borderRadius:4, borderSkipped:false },
+      { label:'Completion', data: CALLS.slice(0,6).map(c=>c.complTok),
+        backgroundColor:'rgba(134,239,172,0.7)', borderRadius:4, borderSkipped:false },
+    ]
+  },
+  options: { ...chartDefaults, indexAxis:'y',
+    scales: { x:{...chartDefaults.scales.x,stacked:true}, y:{...chartDefaults.scales.y,stacked:true} } }
+});
+
+// ── TPS histogram ──
+const tpsVals = CALLS.map(c=>c.tps).filter(v=>v>0);
+const tpsBuckets = ['0-20','20-30','30-40','40-50','50-60','60+'];
+const tpsCounts  = [0,0,0,0,0,0];
+tpsVals.forEach(v => {
+  if(v<20) tpsCounts[0]++;
+  else if(v<30) tpsCounts[1]++;
+  else if(v<40) tpsCounts[2]++;
+  else if(v<50) tpsCounts[3]++;
+  else if(v<60) tpsCounts[4]++;
+  else tpsCounts[5]++;
+});
+new Chart(document.getElementById('tpsHistChart'), {
+  type:'bar',
+  data:{ labels:tpsBuckets, datasets:[{ data:tpsCounts,
+    backgroundColor:'rgba(245,158,11,0.6)', borderRadius:5, borderSkipped:false }] },
+  options: chartDefaults
+});
+
+// ── Sparklines ──
+function drawSparkline(id, data, color) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+
+  // ✅ Fix: set size before Chart.js touches it
+  canvas.height = 32;
+  canvas.style.height = '32px';
+  canvas.style.maxHeight = '32px';
+
+  new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: data.map((_, i) => i),
+      datasets: [{
+        data,
+        borderColor: color,
+        borderWidth: 1.5,
+        tension: 0.4,
+        pointRadius: 0,
+        fill: true,
+        backgroundColor: color.replace('rgb', 'rgba').replace(')', ',0.1)')
+      }]
+    },
+    options: {
+      animation: false,
+      responsive: false,       // ✅ KEY FIX — disables the resize observer loop
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false } }
+    }
+  });
+}
+drawSparkline('sparkCalls',   [180,210,195,230,215,247,230], '#f59e0b');
+drawSparkline('sparkLatency', [1.2,1.5,1.1,1.6,1.3,1.4,1.5], '#fca5a5');
+drawSparkline('sparkTps',     [32,38,35,42,39,38,40],         '#34d399');
+drawSparkline('sparkTokens',  [140,165,155,180,172,182,175],  '#93c5fd');
+drawSparkline('sparkCost',    [0.6,0.72,0.65,0.79,0.74,0.82,0.77], '#a5b4fc');
+
+// ── Populate calls table ──
+function renderCalls(data) {
+  const tbody = document.getElementById('callsBody');
+  tbody.innerHTML = data.map(c => {
+    const maxLat = 4;
+    const barW = Math.min((c.latency / maxLat) * 100, 100);
+    const barColor = c.latency > 3 ? '#fca5a5' : c.latency > 2 ? 'var(--amber)' : '#34d399';
+    return `<tr onclick="openDrawer('${c.id}')" data-status="${c.status}" data-model="${c.model}">
+      <td><span class="status-dot ${c.status}"></span>${c.status.toUpperCase()}</td>
+      <td class="mono-sm">${c.ts}</td>
+      <td><span class="model-tag" style="${c.model.includes('8b') ? 'background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.2);color:#a5b4fc;' : ''}">${c.model.split('-').slice(0,3).join('-')}</span></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;">${c.prompt}</td>
+      <td class="mono-sm">${c.promptTok}</td>
+      <td class="mono-sm">${c.complTok}</td>
+      <td class="mono-sm">${c.tps || '—'}</td>
+      <td>
+        <div class="latency-bar-wrap">
+          <div class="latency-bar" style="width:${barW}%;background:${barColor};"></div>
+          <span class="mono-sm">${c.latency}s</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+renderCalls(CALLS);
+
+// ── Filters ──
+function filterCalls(q) {
+  document.querySelectorAll('#callsBody tr').forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+function filterCallsByStatus(s) {
+  document.querySelectorAll('#callsBody tr').forEach(r => {
+    r.style.display = (!s || r.dataset.status === s) ? '' : 'none';
+  });
+}
+function filterCallsByModel(m) {
+  document.querySelectorAll('#callsBody tr').forEach(r => {
+    r.style.display = (!m || r.dataset.model === m) ? '' : 'none';
+  });
+}
+
+// ── Drawer ──
+function openDrawer(id) {
+  const c = CALLS.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('dModel').textContent    = c.model;
+  document.getElementById('dLatency').textContent  = c.latency + 's';
+  document.getElementById('dTps').textContent      = c.tps || '—';
+  document.getElementById('dTime').textContent     = c.ts;
+  document.getElementById('dPromptTok').textContent= c.promptTok;
+  document.getElementById('dComplTok').textContent = c.complTok;
+  document.getElementById('dTotalTok').textContent = c.promptTok + c.complTok;
+  document.getElementById('dPrompt').textContent   = c.prompt;
+  document.getElementById('dResponse').textContent = c.response;
+  document.getElementById('dRaw').innerHTML = `<pre style="color:#e2e8f0">${JSON.stringify({id:c.id,model:c.model,latency:c.latency,tps:c.tps,tokens:{prompt:c.promptTok,completion:c.complTok,total:c.promptTok+c.complTok}},null,2)}</pre>`;
+  document.getElementById('drawerOverlay').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+}
+document.getElementById('drawerOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('drawerOverlay')) closeDrawer();
+});
+
+// ── Tabs ──
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── Export ──
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(CALLS, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'llm_calls.json'; a.click();
+}
+
+function copyCode(id) {
+  const text = document.getElementById(id).innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const t = document.getElementById('toast');
+    t.textContent = '✓ Copied to clipboard'; t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2000);
+  });
+}
+
+function refreshStats() {
+  const btn = document.querySelector('.refresh-btn');
+  btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 0.6s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refreshing…';
+  setTimeout(() => { btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Refresh'; }, 1000);
+}
+
+function updateTimeRange(val) { console.log('Time range:', val); /* hook to backend */ }
+</script>
+
+<style>
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
