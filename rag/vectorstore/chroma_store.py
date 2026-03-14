@@ -1,4 +1,4 @@
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 
 class ChromaStore:
     def __init__(self, embedding_function):
@@ -12,6 +12,10 @@ class ChromaStore:
         return self.db
 
     def similarity_search(self, query, k=5):
+        results = self.db.similarity_search(query, k=k)
+        return results
+    
+    def similarity_search_with_score(self, query, k=5):
         results = self.db.similarity_search_with_score(query, k=k)
         return results
 

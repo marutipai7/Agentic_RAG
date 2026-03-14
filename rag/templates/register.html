@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — AgenticRAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080c14; --bg2: #0d1220; --glass: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08); --amber: #f59e0b; --amber-dim: #b45309;
+      --amber-glow: rgba(245,158,11,0.12); --text: #e2e8f0; --muted: #64748b;
+      --danger: #ef4444; --success: #10b981;
+      --font-head: 'Syne',sans-serif; --font-mono: 'Syne Mono',monospace;
+      --font-body: 'DM Sans',sans-serif;
+    }
+    html,body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; }
+
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(245,158,11,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(245,158,11,0.03) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none;
+    }
+    .orb {
+      position: fixed; width: 700px; height: 700px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(245,158,11,0.06) 0%, transparent 70%);
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 40px 20px; position: relative; z-index: 1;
+    }
+
+    .form-wrap {
+      width: 100%; max-width: 520px;
+    }
+
+    .form-header {
+      text-align: center; margin-bottom: 40px;
+    }
+    .logo {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--font-mono); font-size: 12px;
+      letter-spacing: 2px; text-transform: uppercase; color: var(--amber);
+      margin-bottom: 20px;
+    }
+    .logo-hex {
+      width: 28px; height: 28px; background: var(--amber-glow);
+      border: 1px solid rgba(245,158,11,0.3);
+      border-radius: 6px; display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .form-header h2 { font-family: var(--font-head); font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+    .form-header p { font-size: 14px; color: var(--muted); }
+
+    .card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 36px;
+    }
+
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .field { margin-bottom: 18px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      display: block; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .field input {
+      width: 100%; padding: 12px 14px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 9px; color: var(--text);
+      font-family: var(--font-body); font-size: 14px;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field input:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px var(--amber-glow);
+    }
+    .field input::placeholder { color: var(--muted); }
+
+    .field input.error { border-color: var(--danger); }
+    .field-error { font-size: 12px; color: #fca5a5; margin-top: 5px; }
+
+    .password-strength {
+      margin-top: 8px; display: flex; gap: 4px;
+    }
+    .strength-bar {
+      height: 3px; flex: 1; border-radius: 2px;
+      background: var(--border); transition: background 0.3s;
+    }
+    .strength-bar.weak { background: var(--danger); }
+    .strength-bar.medium { background: var(--amber); }
+    .strength-bar.strong { background: var(--success); }
+
+    .terms {
+      display: flex; align-items: flex-start; gap: 10px;
+      margin-bottom: 24px; font-size: 13px; color: var(--muted);
+    }
+    .terms input[type="checkbox"] {
+      width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0;
+      accent-color: var(--amber);
+    }
+    .terms a { color: var(--amber); text-decoration: none; }
+    .terms a:hover { text-decoration: underline; }
+
+    .btn-primary {
+      width: 100%; padding: 14px;
+      background: var(--amber); color: var(--bg);
+      border: none; border-radius: 10px;
+      font-family: var(--font-head); font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.3px;
+    }
+    .btn-primary:hover {
+      background: #fbbf24;
+      box-shadow: 0 4px 20px rgba(245,158,11,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active { transform: translateY(0); }
+
+    .login-link {
+      text-align: center; font-size: 13px; color: var(--muted); margin-top: 20px;
+    }
+    .login-link a { color: var(--amber); text-decoration: none; font-weight: 600; }
+    .login-link a:hover { text-decoration: underline; }
+
+    .alert-error {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; color: #fca5a5; margin-bottom: 20px;
+    }
+
+    @media (max-width: 540px) {
+      .field-grid { grid-template-columns: 1fr; }
+      .card { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="orb"></div>
+
+  <div class="page">
+    <div class="form-wrap">
+      <div class="form-header">
+        <div class="logo"><div class="logo-hex">⬡</div>AgenticRAG</div>
+        <h2>Create your account</h2>
+        <p>Start querying your documents with AI</p>
+      </div>
+
+      {% if form.errors %}
+      <div class="alert-error">Please fix the errors below to continue.</div>
+      {% endif %}
+
+      <div class="card">
+        <form method="POST" action="/register/">
+          {% csrf_token %}
+          <div class="field-grid">
+            <div class="field">
+              <label>First Name</label>
+              <input type="text" name="first_name" placeholder="Ada" />
+            </div>
+            <div class="field">
+              <label>Last Name</label>
+              <input type="text" name="last_name" placeholder="Lovelace" />
+            </div>
+            <div class="field full">
+              <label>Username</label>
+              <input type="text" name="username" placeholder="ada_lovelace" required />
+            </div>
+            <div class="field full">
+              <label>Email Address</label>
+              <input type="email" name="email" placeholder="ada@example.com" required />
+            </div>
+            <div class="field full">
+              <label>Password</label>
+              <input type="password" name="password1" id="pwd" placeholder="Min. 8 characters" required
+                     oninput="checkStrength(this.value)" />
+              <div class="password-strength">
+                <div class="strength-bar" id="s1"></div>
+                <div class="strength-bar" id="s2"></div>
+                <div class="strength-bar" id="s3"></div>
+                <div class="strength-bar" id="s4"></div>
+              </div>
+            </div>
+            <div class="field full">
+              <label>Confirm Password</label>
+              <input type="password" name="password2" placeholder="Repeat password" required />
+            </div>
+          </div>
+
+          <div class="terms">
+            <input type="checkbox" name="terms" required />
+            <span>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
+          </div>
+
+          <button type="submit" class="btn-primary">Create Account →</button>
+        </form>
+      </div>
+
+      <p class="login-link">Already have an account? <a href="/login/">Sign in</a></p>
+    </div>
+  </div>
+
+  <script>
+    function checkStrength(val) {
+      const bars = [document.getElementById('s1'), document.getElementById('s2'),
+                    document.getElementById('s3'), document.getElementById('s4')];
+      bars.forEach(b => b.className = 'strength-bar');
+      if (!val) return;
+      let score = 0;
+      if (val.length >= 8) score++;
+      if (/[A-Z]/.test(val)) score++;
+      if (/[0-9]/.test(val)) score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+      const cls = score <= 1 ? 'weak' : score <= 2 ? 'medium' : 'strong';
+      bars.slice(0, score).forEach(b => b.classList.add(cls));
+    }
+  </script>
+</body>
+</html>

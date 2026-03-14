@@ -7,6 +7,10 @@ from rest_framework import status
 from rag.core.dependencies import ingestion_service, retrieval_service, vector_store
 from rag.services.agentic_service import AgenticService
 
+
+def login_view(request):
+    return render(request, "rag/templates/login.html")
+
 class UploadDocumentView(APIView):
 
     parser_classes  = [MultiPartParser, FormParser]

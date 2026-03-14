@@ -1,0 +1,329 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard — AgenticRAG{% endblock %}
+{% block nav_dash %}active{% endblock %}
+{% block breadcrumb %}/ <span>Dashboard</span>{% endblock %}
+{% block username %}{{ user.username }}{% endblock %}
+{% block avatar_initial %}{{ user.username|first|upper }}{% endblock %}
+
+{% block head %}
+<style>
+  .dash-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+
+  .stat-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 22px 24px;
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .stat-card:hover { border-color: rgba(245,158,11,0.3); transform: translateY(-2px); }
+  .stat-card::after {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--amber), transparent);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .stat-card:hover::after { opacity: 1; }
+
+  .stat-label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 10px;
+  }
+  .stat-value {
+    font-family: var(--font-head); font-size: 36px; font-weight: 800;
+    color: var(--text); line-height: 1;
+  }
+  .stat-value .unit { font-size: 16px; color: var(--muted); font-weight: 400; }
+  .stat-change {
+    font-size: 12px; margin-top: 8px; display: flex; align-items: center; gap: 4px;
+  }
+  .stat-change.up { color: var(--success); }
+  .stat-change.down { color: var(--danger); }
+  .stat-icon {
+    position: absolute; top: 20px; right: 20px;
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--glass); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--amber);
+  }
+
+  /* Section headers */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-family: var(--font-head); font-size: 16px; font-weight: 700;
+  }
+  .section-sub {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+  }
+  .btn-sm {
+    padding: 7px 14px; font-size: 12px; font-weight: 600;
+    border-radius: 7px; border: 1px solid var(--border);
+    background: var(--glass); color: var(--text);
+    cursor: pointer; text-decoration: none;
+    transition: all 0.2s;
+  }
+  .btn-sm:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* Two-col layout */
+  .dash-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .dash-row.wide { grid-template-columns: 2fr 1fr; }
+
+  .panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+  }
+
+  /* Activity feed */
+  .activity-list { display: flex; flex-direction: column; gap: 0; }
+  .activity-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .activity-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .activity-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--amber); margin-top: 6px; flex-shrink: 0;
+  }
+  .activity-dot.muted { background: var(--muted); }
+  .activity-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .activity-text span { color: var(--amber); font-weight: 600; }
+  .activity-time { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* Documents table */
+  .doc-table { width: 100%; border-collapse: collapse; }
+  .doc-table th {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--muted);
+    padding: 0 12px 12px; text-align: left; font-weight: 400;
+  }
+  .doc-table td { padding: 10px 12px; border-top: 1px solid var(--border); font-size: 13px; }
+  .doc-table tr:hover td { background: var(--glass); }
+  .doc-name { font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .doc-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--amber-glow); border: 1px solid rgba(245,158,11,0.2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--amber); flex-shrink: 0;
+  }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px; font-weight: 600;
+  }
+  .badge.indexed { background: rgba(16,185,129,0.15); color: #34d399; }
+  .badge.pending { background: rgba(245,158,11,0.15); color: var(--amber); }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: var(--radius);
+    padding: 32px; text-align: center; cursor: pointer;
+    transition: all 0.2s; margin-bottom: 20px;
+  }
+  .upload-zone:hover { border-color: var(--amber); background: var(--amber-glow); }
+  .upload-icon { color: var(--amber); margin-bottom: 10px; }
+  .upload-zone h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .upload-zone p { font-size: 12px; color: var(--muted); }
+
+  /* Quick actions */
+  .quick-actions { display: flex; flex-direction: column; gap: 10px; }
+  .action-btn {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--glass);
+    color: var(--text); text-decoration: none;
+    font-size: 13px; font-weight: 500;
+    transition: all 0.2s; cursor: pointer;
+  }
+  .action-btn:hover { border-color: var(--amber); color: var(--amber); background: var(--amber-glow); }
+  .action-btn .action-icon {
+    width: 32px; height: 32px; border-radius: 7px;
+    background: var(--bg); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+
+  @media (max-width: 1100px) {
+    .dash-grid { grid-template-columns: repeat(2, 1fr); }
+    .dash-row, .dash-row.wide { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+  <a href="/chat/" style="padding:8px 16px;background:var(--amber);color:var(--bg);border-radius:8px;font-size:13px;font-weight:700;text-decoration:none;font-family:var(--font-head);">
+    + New Chat
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stat cards -->
+<div class="dash-grid">
+  <div class="stat-card">
+    <div class="stat-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+      </svg>
+    </div>
+    <div class="stat-label">Documents</div>
+    <div class="stat-value">{{ doc_count|default:"12" }}</div>
+    <div class="stat-change up">↑ 3 this week</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+      </svg>
+    </div>
+    <div class="stat-label">Queries</div>
+    <div class="stat-value">{{ query_count|default:"84" }}</div>
+    <div class="stat-change up">↑ 12 today</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/>
+      </svg>
+    </div>
+    <div class="stat-label">Chunks Indexed</div>
+    <div class="stat-value">{{ chunk_count|default:"2.4" }}<span class="unit">k</span></div>
+    <div class="stat-change up">↑ 148 new</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+    </div>
+    <div class="stat-label">Avg. Latency</div>
+    <div class="stat-value">1.2<span class="unit">s</span></div>
+    <div class="stat-change down">↓ 0.3s slower</div>
+  </div>
+</div>
+
+<!-- Main row -->
+<div class="dash-row wide">
+  <!-- Documents table -->
+  <div class="panel">
+    <div class="section-header">
+      <div>
+        <div class="section-sub">Corpus</div>
+        <div class="section-title">Indexed Documents</div>
+      </div>
+      <a href="/ingest/" class="btn-sm">+ Upload</a>
+    </div>
+
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>Document</th>
+          <th>Chunks</th>
+          <th>Status</th>
+          <th>Uploaded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in documents %}
+        <tr>
+          <td><div class="doc-name">
+            <div class="doc-icon">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              </svg>
+            </div>{{ doc.name }}
+          </div></td>
+          <td style="color:var(--muted)">{{ doc.chunks }}</td>
+          <td><span class="badge indexed">Indexed</span></td>
+          <td style="color:var(--muted);font-family:var(--font-mono);font-size:11px;">{{ doc.date }}</td>
+        </tr>
+        {% empty %}
+        <tr><td><div class="doc-name"><div class="doc-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg></div>research_paper.pdf</div></td><td style="color:var(--muted)">124</td><td><span class="badge indexed">Indexed</span></td><td style="color:var(--muted);font-family:var(--font-mono);font-size:11px;">2026-03-10</td></tr>
+        <tr><td><div class="doc-name"><div class="doc-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg></div>user_manual.txt</div></td><td style="color:var(--muted)">88</td><td><span class="badge indexed">Indexed</span></td><td style="color:var(--muted);font-family:var(--font-mono);font-size:11px;">2026-03-08</td></tr>
+        <tr><td><div class="doc-name"><div class="doc-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg></div>company_faq.docx</div></td><td style="color:var(--muted)">41</td><td><span class="badge pending">Pending</span></td><td style="color:var(--muted);font-family:var(--font-mono);font-size:11px;">2026-03-14</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Right col -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+    <!-- Quick actions -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">Quick Actions</div>
+      </div>
+      <div class="quick-actions">
+        <a href="/chat/" class="action-btn">
+          <div class="action-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </div>
+          Ask a question
+        </a>
+        <a href="/ingest/" class="action-btn">
+          <div class="action-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+              <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>
+            </svg>
+          </div>
+          Upload document
+        </a>
+        <a href="/profile/" class="action-btn">
+          <div class="action-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+            </svg>
+          </div>
+          Edit profile
+        </a>
+      </div>
+    </div>
+
+    <!-- Activity -->
+    <div class="panel">
+      <div class="section-header">
+        <div class="section-title">Recent Activity</div>
+      </div>
+      <div class="activity-list">
+        <div class="activity-item">
+          <div class="activity-dot"></div>
+          <div>
+            <div class="activity-text">Query: <span>"What is RAG?"</span></div>
+            <div class="activity-time">2 minutes ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot"></div>
+          <div>
+            <div class="activity-text">Uploaded <span>research_paper.pdf</span></div>
+            <div class="activity-time">1 hour ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot muted"></div>
+          <div>
+            <div class="activity-text">Query: <span>"Summarize chapter 3"</span></div>
+            <div class="activity-time">3 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot muted"></div>
+          <div>
+            <div class="activity-text">Indexed <span>88 chunks</span> from user_manual.txt</div>
+            <div class="activity-time">Yesterday</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

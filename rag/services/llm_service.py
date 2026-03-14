@@ -1,14 +1,13 @@
 import os
 from groq import Groq
-from dotenv import load_dotenv
-
+from dotenv import dotenv_values
 
 
 class LLMService:
     def __init__(self):
-        load_dotenv()
-        self.client = Groq(os.getenv("GROQ_API_KEY"))
-        self.model = "llama3-70b-8192"
+        config = dotenv_values()  # reads .env without touching os.environ
+        self.client = Groq(api_key=config.get("GROQ_API_KEY"))
+        self.model = "llama-3.3-70b-versatile"
 
     def generate(self, prompt:str) -> str:
         response = self.client.chat.completions.create(

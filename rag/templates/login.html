@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login — AgenticRAG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=DM+Sans:wght@300;400;500;600&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080c14; --bg2: #0d1220; --glass: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08); --amber: #f59e0b; --amber-dim: #b45309;
+      --amber-glow: rgba(245,158,11,0.12); --text: #e2e8f0; --muted: #64748b;
+      --danger: #ef4444; --font-head: 'Syne',sans-serif;
+      --font-mono: 'Syne Mono',monospace; --font-body: 'DM Sans',sans-serif;
+    }
+    html,body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(245,158,11,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(245,158,11,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* Glow orb */
+    .orb {
+      position: fixed; width: 600px; height: 600px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%);
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: grid; grid-template-columns: 1fr 1fr;
+    }
+
+    /* Left panel */
+    .left-panel {
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 60px;
+      border-right: 1px solid var(--border);
+      position: relative; z-index: 1;
+    }
+    .brand {
+      margin-bottom: 64px;
+    }
+    .brand .tag {
+      font-family: var(--font-mono);
+      font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--amber); margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .brand .tag::before {
+      content: ''; width: 24px; height: 1px; background: var(--amber);
+    }
+    .brand h1 {
+      font-family: var(--font-head); font-size: 52px; font-weight: 800;
+      line-height: 1.05; color: var(--text);
+    }
+    .brand h1 em { color: var(--amber); font-style: normal; }
+    .brand p {
+      margin-top: 16px; font-size: 15px; color: var(--muted);
+      max-width: 360px; line-height: 1.7;
+    }
+
+    .features { display: flex; flex-direction: column; gap: 20px; }
+    .feature-item {
+      display: flex; align-items: flex-start; gap: 14px;
+    }
+    .feat-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--glass);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; color: var(--amber);
+    }
+    .feat-text h4 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .feat-text p { font-size: 13px; color: var(--muted); }
+
+    /* Right panel — form */
+    .right-panel {
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      padding: 60px; position: relative; z-index: 1;
+    }
+
+    .form-card {
+      width: 100%; max-width: 400px;
+    }
+    .form-header {
+      margin-bottom: 36px;
+    }
+    .form-header .eyebrow {
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--amber); margin-bottom: 10px;
+    }
+    .form-header h2 { font-family: var(--font-head); font-size: 28px; font-weight: 800; }
+    .form-header p { font-size: 14px; color: var(--muted); margin-top: 6px; }
+
+    .field { margin-bottom: 20px; }
+    .field label {
+      display: block; font-size: 12px; font-weight: 600;
+      letter-spacing: 0.5px; color: var(--muted); margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .field input {
+      width: 100%; padding: 13px 16px;
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      font-family: var(--font-body); font-size: 14px;
+      outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .field input:focus {
+      border-color: var(--amber);
+      box-shadow: 0 0 0 3px var(--amber-glow);
+    }
+    .field input::placeholder { color: var(--muted); }
+
+    .field-row {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .field-row label { margin-bottom: 0; }
+    .forgot { font-size: 12px; color: var(--amber); text-decoration: none; }
+    .forgot:hover { text-decoration: underline; }
+
+    .btn-primary {
+      width: 100%; padding: 14px;
+      background: var(--amber); color: var(--bg);
+      border: none; border-radius: 10px;
+      font-family: var(--font-head); font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s; margin-top: 8px;
+      letter-spacing: 0.3px;
+    }
+    .btn-primary:hover {
+      background: #fbbf24;
+      box-shadow: 0 4px 20px rgba(245,158,11,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-primary:active { transform: translateY(0); }
+
+    .divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 24px 0; color: var(--muted); font-size: 12px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    .signup-link {
+      text-align: center; font-size: 13px; color: var(--muted); margin-top: 24px;
+    }
+    .signup-link a { color: var(--amber); text-decoration: none; font-weight: 600; }
+    .signup-link a:hover { text-decoration: underline; }
+
+    .error-msg {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; color: #fca5a5; margin-bottom: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .page { grid-template-columns: 1fr; }
+      .left-panel { display: none; }
+      .right-panel { padding: 40px 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="orb"></div>
+
+  <div class="page">
+    <div class="left-panel">
+      <div class="brand">
+        <div class="tag">AgenticRAG</div>
+        <h1>Think.<br>Retrieve.<br><em>Answer.</em></h1>
+        <p>An intelligent RAG system that retrieves, reasons, and responds — powered by your own documents.</p>
+      </div>
+
+      <div class="features">
+        <div class="feature-item">
+          <div class="feat-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+          </div>
+          <div class="feat-text">
+            <h4>Semantic Retrieval</h4>
+            <p>Vector-powered search across your document corpus</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feat-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div class="feat-text">
+            <h4>Multi-step Reasoning</h4>
+            <p>Agentic pipeline that breaks down complex queries</p>
+          </div>
+        </div>
+        <div class="feature-item">
+          <div class="feat-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <div class="feat-text">
+            <h4>Source-grounded Answers</h4>
+            <p>Every response traceable back to source documents</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div class="form-card">
+        <div class="form-header">
+          <div class="eyebrow">Welcome back</div>
+          <h2>Sign in to your account</h2>
+          <p>Enter your credentials to continue</p>
+        </div>
+
+        {% if form.errors %}
+        <div class="error-msg">Invalid username or password. Please try again.</div>
+        {% endif %}
+
+        <form method="POST" action="/login/">
+          {% csrf_token %}
+          <div class="field">
+            <label>Username</label>
+            <input type="text" name="username" placeholder="your_username" autocomplete="username" required />
+          </div>
+
+          <div class="field">
+            <div class="field-row">
+              <label>Password</label>
+              <a href="/forgot-password/" class="forgot">Forgot password?</a>
+            </div>
+            <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" required />
+          </div>
+
+          <button type="submit" class="btn-primary">Sign In →</button>
+        </form>
+
+        <p class="signup-link">
+          Don't have an account? <a href="/register/">Create one</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

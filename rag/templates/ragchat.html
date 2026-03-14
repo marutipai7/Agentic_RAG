@@ -1,0 +1,394 @@
+{% extends "layout.html" %}
+{% block title %}RAG Chat — AgenticRAG{% endblock %}
+{% block nav_chat %}active{% endblock %}
+{% block breadcrumb %}/ <span>RAG Chat</span>{% endblock %}
+{% block username %}{{ user.username }}{% endblock %}
+{% block avatar_initial %}{{ user.username|first|upper }}{% endblock %}
+
+{% block head %}
+<style>
+  /* Override page-content padding for full-height chat */
+  .page-content { padding: 0 !important; height: calc(100vh - 60px); display: flex; }
+
+  /* Chat layout */
+  .chat-wrap {
+    display: flex; width: 100%; height: 100%;
+  }
+
+  /* Conversation history sidebar */
+  .conv-sidebar {
+    width: 260px; flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    background: var(--bg2);
+  }
+  .conv-header {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .conv-header h3 { font-family: var(--font-head); font-size: 14px; font-weight: 700; }
+  .icon-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--glass);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--muted); transition: all 0.2s;
+  }
+  .icon-btn:hover { color: var(--amber); border-color: var(--amber); }
+
+  .conv-list { flex: 1; overflow-y: auto; padding: 10px 8px; }
+  .conv-item {
+    padding: 10px 12px; border-radius: 8px;
+    cursor: pointer; transition: background 0.15s;
+    margin-bottom: 2px;
+  }
+  .conv-item:hover { background: var(--glass); }
+  .conv-item.active { background: var(--amber-glow); border: 1px solid rgba(245,158,11,0.2); }
+  .conv-item .conv-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .conv-item.active .conv-title { color: var(--amber); }
+  .conv-item .conv-meta { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  /* Main chat area */
+  .chat-main {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .messages {
+    flex: 1; overflow-y: auto;
+    padding: 32px 40px;
+    display: flex; flex-direction: column; gap: 24px;
+  }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px;
+    text-align: center; padding: 40px;
+  }
+  .empty-icon {
+    width: 64px; height: 64px; border-radius: 16px;
+    background: var(--amber-glow); border: 1px solid rgba(245,158,11,0.2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--amber); margin-bottom: 8px;
+  }
+  .empty-state h3 { font-family: var(--font-head); font-size: 20px; font-weight: 700; }
+  .empty-state p { font-size: 14px; color: var(--muted); max-width: 380px; line-height: 1.6; }
+
+  .suggestion-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+  .chip {
+    padding: 8px 14px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--glass);
+    font-size: 13px; color: var(--muted); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .chip:hover { border-color: var(--amber); color: var(--amber); background: var(--amber-glow); }
+
+  /* Messages */
+  .msg { display: flex; gap: 14px; max-width: 800px; animation: fadeUp 0.3s ease; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 12px; font-weight: bold;
+  }
+  .msg-avatar.ai {
+    background: var(--amber-glow); border: 1px solid rgba(245,158,11,0.3);
+    color: var(--amber);
+  }
+  .msg-avatar.user-av {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+  }
+
+  .msg-body { flex: 1; }
+  .msg-sender {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+  }
+  .msg-bubble {
+    padding: 14px 18px; border-radius: 12px;
+    font-size: 14px; line-height: 1.7;
+  }
+  .msg.ai .msg-bubble {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-top-left-radius: 4px; color: var(--text);
+  }
+  .msg.user .msg-bubble {
+    background: var(--amber); color: var(--bg);
+    border-top-right-radius: 4px; font-weight: 500;
+  }
+  .msg.user .msg-sender { text-align: right; }
+
+  /* Sources */
+  .sources {
+    margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .source-chip {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 6px;
+    background: var(--glass); border: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+  .source-chip::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--amber); flex-shrink: 0;
+  }
+
+  /* Thinking indicator */
+  .thinking {
+    display: flex; gap: 5px; align-items: center; padding: 14px 18px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 12px; border-top-left-radius: 4px;
+    width: fit-content;
+  }
+  .thinking span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--amber); animation: bounce 1.2s infinite;
+  }
+  .thinking span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* Input area */
+  .input-area {
+    padding: 20px 40px 24px;
+    border-top: 1px solid var(--border);
+    background: rgba(8,12,20,0.8);
+    backdrop-filter: blur(12px);
+  }
+  .input-wrap {
+    display: flex; gap: 12px; align-items: flex-end;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-wrap:focus-within {
+    border-color: var(--amber);
+    box-shadow: 0 0 0 3px var(--amber-glow);
+  }
+  .chat-input {
+    flex: 1; background: none; border: none; outline: none;
+    color: var(--text); font-family: var(--font-body); font-size: 14px;
+    resize: none; max-height: 120px; line-height: 1.5;
+    padding: 2px 0;
+  }
+  .chat-input::placeholder { color: var(--muted); }
+  .send-btn {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--amber); border: none;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; color: var(--bg);
+    transition: all 0.2s;
+  }
+  .send-btn:hover { background: #fbbf24; transform: scale(1.05); }
+  .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+
+  .input-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 8px;
+  }
+  .input-hint { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.5px; }
+  .model-tag {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px;
+    color: var(--amber); background: var(--amber-glow);
+    border: 1px solid rgba(245,158,11,0.2); border-radius: 4px;
+    padding: 2px 8px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-wrap">
+
+  <!-- Conversation history -->
+  <div class="conv-sidebar">
+    <div class="conv-header">
+      <h3>History</h3>
+      <div class="icon-btn" onclick="newChat()" title="New chat">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </div>
+    </div>
+    <div class="conv-list" id="convList">
+      <div class="conv-item active">
+        <div class="conv-title">What is agentic RAG?</div>
+        <div class="conv-meta">Today · 3 msgs</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">Summarize chapter 3</div>
+        <div class="conv-meta">Today · 5 msgs</div>
+      </div>
+      <div class="conv-item">
+        <div class="conv-title">Explain vector embeddings</div>
+        <div class="conv-meta">Yesterday · 7 msgs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main chat -->
+  <div class="chat-main">
+    <div class="messages" id="messages">
+
+      <!-- Empty state (shown when no messages) -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+          </svg>
+        </div>
+        <h3>Ask your documents anything</h3>
+        <p>I'll search through your indexed documents and provide grounded, source-cited answers.</p>
+        <div class="suggestion-chips">
+          <div class="chip" onclick="fillQuery(this)">What is RAG?</div>
+          <div class="chip" onclick="fillQuery(this)">Summarize the main findings</div>
+          <div class="chip" onclick="fillQuery(this)">List key concepts</div>
+          <div class="chip" onclick="fillQuery(this)">Compare approaches</div>
+        </div>
+      </div>
+
+      <!-- Example messages (rendered by Django context in real use) -->
+    </div>
+
+    <div class="input-area">
+      <form id="chatForm" onsubmit="submitQuery(event)">
+        {% csrf_token %}
+        <div class="input-wrap">
+          <textarea
+            class="chat-input"
+            id="queryInput"
+            placeholder="Ask a question about your documents…"
+            rows="1"
+            onkeydown="handleKey(event)"
+            oninput="autoResize(this)"
+          ></textarea>
+          <button type="submit" class="send-btn" id="sendBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+        <div class="input-footer">
+          <span class="input-hint">Enter to send · Shift+Enter for newline</span>
+          <span class="model-tag">llama-3.3-70b</span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  const messagesEl = document.getElementById('messages');
+  const emptyState = document.getElementById('emptyState');
+  const queryInput = document.getElementById('queryInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById('chatForm').dispatchEvent(new Event('submit'));
+    }
+  }
+
+  function fillQuery(el) {
+    queryInput.value = el.textContent;
+    queryInput.focus();
+  }
+
+  function newChat() {
+    messagesEl.innerHTML = '';
+    messagesEl.appendChild(emptyState);
+    emptyState.style.display = 'flex';
+  }
+
+  function appendMessage(role, text, sources = []) {
+    emptyState.style.display = 'none';
+
+    const isUser = role === 'user';
+    const div = document.createElement('div');
+    div.className = `msg ${role === 'user' ? 'user' : 'ai'}`;
+
+    const avatarLabel = isUser ? '{{ user.username|first|upper|default:"U" }}' : 'AI';
+    const avatarClass = isUser ? 'user-av' : 'ai';
+
+    let sourcesHTML = '';
+    if (sources.length) {
+      sourcesHTML = `<div class="sources">` +
+        sources.map(s => `<div class="source-chip">${s}</div>`).join('') +
+        `</div>`;
+    }
+
+    div.innerHTML = `
+      <div class="msg-avatar ${avatarClass}">${avatarLabel}</div>
+      <div class="msg-body">
+        <div class="msg-sender">${isUser ? 'You' : 'AgenticRAG'}</div>
+        <div class="msg-bubble">${text}</div>
+        ${sourcesHTML}
+      </div>`;
+
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function appendThinking() {
+    emptyState.style.display = 'none';
+    const div = document.createElement('div');
+    div.className = 'msg ai'; div.id = 'thinking';
+    div.innerHTML = `
+      <div class="msg-avatar ai">AI</div>
+      <div class="msg-body">
+        <div class="msg-sender">AgenticRAG</div>
+        <div class="thinking"><span></span><span></span><span></span></div>
+      </div>`;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  async function submitQuery(e) {
+    e.preventDefault();
+    const question = queryInput.value.trim();
+    if (!question) return;
+
+    appendMessage('user', question);
+    queryInput.value = '';
+    queryInput.style.height = 'auto';
+    sendBtn.disabled = true;
+    appendThinking();
+
+    try {
+      const res = await fetch('/query/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ question })
+      });
+      const data = await res.json();
+      document.getElementById('thinking')?.remove();
+
+      const sources = (data.sources || []).map(s => s.source || s.filename || 'document');
+      appendMessage('ai', data.answer || 'No answer returned.', sources);
+    } catch (err) {
+      document.getElementById('thinking')?.remove();
+      appendMessage('ai', '⚠️ Something went wrong. Please try again.');
+    } finally {
+      sendBtn.disabled = false;
+      queryInput.focus();
+    }
+  }
+</script>
+{% endblock %}
